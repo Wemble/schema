@@ -1,3 +1,5 @@
+import { ObjectID } from 'mongodb';
+
 export interface ISchemaRegistry {
     [key: string]: ISchemaObject;
 }
@@ -28,4 +30,11 @@ export interface ISchemaObject {
      * Anything that can be helpful to the frontend for displaying this information
      */
     metaData?: { [key: string]: any };
+}
+
+export interface IModelData {
+    [key: string]: any;
+    _created?: Date;
+    _modified?: Date;
+    _id?: ObjectID | string;
 }
