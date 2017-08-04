@@ -1,4 +1,3 @@
-import { Schema } from './Schema';
 import { ISchemaObject, ISchemaRegistry, SchemaManager } from './';
 import { Observable } from 'rxjs';
 
