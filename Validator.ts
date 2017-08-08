@@ -62,8 +62,6 @@ export class Validator {
     }
 
     private validateItem(schema: ISchemaObject, modelData: any, full: boolean): Observable<boolean> {
-        // const keys: string[] = Object.keys(modelData);
-
         const keys: string[] = full ? Object.keys(schema.type)
             : Object.keys(modelData);
 
