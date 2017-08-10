@@ -1,4 +1,13 @@
 import { ObjectID } from 'mongodb';
+import { Observable } from 'rxjs';
+
+/**
+ * metaValue is the value in the metaData of the schema
+ * key is the name of the key we are currently validating
+ * value is the given value in the object we are validating
+ * keyType is the type of the key in the Schema
+ */
+export type metaDataValidator = (metaValue: any, key: string, value: any, keyType: any) => Observable<boolean>;
 
 export interface ISchemaRegistry {
     [key: string]: ISchemaObject;

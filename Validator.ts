@@ -1,4 +1,4 @@
-import { ISchemaObject, ISchemaRegistry, SchemaManager } from './';
+import { ISchemaObject, ISchemaRegistry, SchemaManager, metaDataValidator } from './';
 import { Observable } from 'rxjs';
 
 export class Validator {
@@ -8,8 +8,21 @@ export class Validator {
     private static readonly PRIMITIVES: string[] = ['String',
         'Boolean', 'Number'];
 
-    constructor(private _schemaManager: SchemaManager) {
+    private _metaValidator: {
+        [key: string]: metaDataValidator;
+    } = {};
 
+
+    constructor(private _schemaManager: SchemaManager) {
+        _schemaManager.validator = this;
+    }
+
+    get schemaManager(): SchemaManager {
+        return this._schemaManager;
+    }
+
+    public setMetaDataValidator(metaKey: string, f: metaDataValidator): void {
+        this._metaValidator[metaKey] = f;
     }
 
     /**
@@ -81,11 +94,51 @@ export class Validator {
             });
     }
 
+    private validateMetaData(schema: ISchemaObject, key: string, value: any): Observable<boolean> {
+        const metaData: any = schema.metaData;
+
+        if (!metaData) {
+            // There is no metaData so this key, value pair is valid
+            return Observable.of(true);
+        }
+
+        const keyData: any = metaData[key];
+
+        if (!keyData) {
+            // This key has no metaData
+            return Observable.of(true);
+        }
+
+        const keyArray: string[] = Object.keys(keyData);
+
+        if (!keyArray.length) {
+            // keyData is an empty object
+            return Observable.of(true);
+        }
+
+        return Observable.from(keyArray)
+            .flatMap((metaKey: string) => {
+                if (!this._metaValidator.hasOwnProperty(metaKey)) {
+                    // We don't know how to handle this type of metadata.
+                    return Observable.of(true);
+                }
+
+                const type: string = this.getSchemaKeyType(schema, key);
+
+                return this._metaValidator[metaKey](keyData[metaKey], key, value, type);
+            })
+            .every((b: boolean) => b);
+    }
+
     private validateValue(schema: ISchemaObject,
         key: string, value: any, full: boolean): Observable<boolean> {
         // These keys are always allowed
         if (Validator.WHITELISTED_KEYS.indexOf(key) !== -1) {
             return Observable.of(true);
+        }
+
+        if (typeof value === 'string') {
+            // Unresolved schema ?
         }
 
         const type: string = this.getSchemaKeyType(schema, key);
@@ -94,14 +147,14 @@ export class Validator {
             const valueType: string = typeof value;
             // We are dealing with a primitive type
             if (valueType === type.toLowerCase()) {
-                return Observable.of(true);
+                return this.validateMetaData(schema, key, value);
             } else if (valueType === 'undefined') {
                 if (full && this.isKeyRequired(schema, key)) {
                     return Observable.throw(`Key ${key} in ${schema.name} is`
                         + ` not defined, but this key is required.`);
                 } else {
                     // Not doing a full check so it's fine
-                    return Observable.of(true);
+                    return this.validateMetaData(schema, key, value);
                 }
             } else {
                 return Observable.throw(`Key ${key} in ${schema.name} is`
@@ -110,7 +163,9 @@ export class Validator {
         }
 
         // Else, this object is another schema
-        return this.validateModel(type, value, full);
+        return this.validateModel(type, value, full)
+            .every((b: boolean) => b)
+            .flatMapTo(this.validateMetaData(schema, key, value));
     }
 
     private getSchemaKeyType(schema: ISchemaObject, key: string): string {

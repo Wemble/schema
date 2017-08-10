@@ -7,6 +7,14 @@ export class SchemaManager {
     private _schemaRegistry: ISchemaRegistry = {};
     private _validator: Validator;
 
+    public static schemaFromJson(obj: object): ISchemaObject {
+        const schema: any = {};
+
+
+
+        return <ISchemaObject>schema;
+    }
+
     public getSchema(name: string): ISchemaObject {
         if (!this._schemaRegistry.hasOwnProperty(name)) {
             throw new Error(`A schema with name ${name} isn't registered!`);
@@ -62,6 +70,12 @@ export class SchemaManager {
         }
 
         return this._validator;
+    }
+
+    set validator(v: Validator) {
+        if (v.schemaManager === this) {
+            this._validator = v;
+        }
     }
 
     constructor() {
