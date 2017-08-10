@@ -1,3 +1,4 @@
+import { ISchemaObjectJson } from './interfaces';
 import { Validator } from './Validator';
 import { ISchemaObject, ISchemaRegistry, } from './';
 import * as _ from 'lodash';
@@ -16,7 +17,7 @@ export class SchemaManager {
         return schema.resolved !== false;
     }
 
-    public static schemaFromJson(obj: any): ISchemaObject {
+    public static schemaFromJson(obj: ISchemaObjectJson): ISchemaObject {
         const schema: ISchemaObject = {
             name: obj.name,
             type: {}

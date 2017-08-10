@@ -54,6 +54,21 @@ export interface ISchemaObject {
     metaData?: { [key: string]: any };
 }
 
+/**
+ * This is how a schema can be saved on disk
+ */
+export interface ISchemaObjectJson {
+    name: string;
+
+    type: { [key: string]: string };
+
+    isArray?: boolean;
+
+    uniqueKey?: string;
+
+    metaData?: { [key: string]: any };
+}
+
 export interface IModelData {
     [key: string]: any;
     _created?: Date;
