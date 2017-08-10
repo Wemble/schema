@@ -15,16 +15,29 @@ export interface ISchemaRegistry {
 
 export interface ISchemaObject {
     /**
+     * Indicates if this schema is fully resolved. Being resolved means that all
+     * types are either Function or ISchemaObject and not string.
+     *
+     * An unresolved schema still has strings indicating references to other schemas.
+     * When the resolved parameter is not present it means that the schema IS resolved
+     * This means simply checking `if(obj.resolved)` won't have correct behaviour!
+     */
+    resolved?: boolean;
+
+    /**
      * The name of this object.
      */
     name: string;
 
     /**
      * Indicates what type this object is.
-     * Function means a constructor of a class/type. Examples arE:
+     * Function means a constructor of a class/type. Possibilities are::
      * String | Boolean | Number
+     *
+     * When type is a string it indicates an unresolved reference to a different
+     * SchemaObject.
      */
-    type: { [key: string]: Function | ISchemaObject };
+    type: { [key: string]: Function | ISchemaObject | string };
 
     /**
      * Indicates if this object should be an array

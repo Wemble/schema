@@ -1,5 +1,5 @@
 import { Validator } from './Validator';
-import { ISchemaObject, ISchemaRegistry } from './';
+import { ISchemaObject, ISchemaRegistry, } from './';
 import * as _ from 'lodash';
 import { Observable } from 'rxjs';
 
@@ -7,12 +7,58 @@ export class SchemaManager {
     private _schemaRegistry: ISchemaRegistry = {};
     private _validator: Validator;
 
-    public static schemaFromJson(obj: object): ISchemaObject {
-        const schema: any = {};
+    /**
+     * Checks if a schema is resolved. If the resolved property is not present
+     * it means the schema IS resolved. This is why we need an explicit false check.
+     * @param schema
+     */
+    public static isSchemaResolved(schema: ISchemaObject): boolean {
+        return schema.resolved !== false;
+    }
+
+    public static schemaFromJson(obj: any): ISchemaObject {
+        const schema: ISchemaObject = {
+            name: obj.name,
+            type: {}
+        };
+
+        if (typeof obj.isArray !== 'undefined') {
+            schema.isArray = obj.isArray;
+        }
+
+        if (typeof obj.uniqueKey !== 'undefined') {
+            schema.uniqueKey = obj.uniqueKey;
+        }
+
+        if (typeof obj.metaData !== 'undefined') {
+            schema.metaData = obj.metaData;
+        }
+
+        if (typeof obj.type === 'undefined') {
+            return schema;
+        }
+
+        Object.keys(obj.type).forEach((key: string) => {
+            const val: any = obj.type[key];
+
+            if (typeof val === 'string') {
+                if (Validator.PRIMITIVES.indexOf(val) !== -1) {
+                    // The string is either Number, String or Boolean. We simply set the type
+                    // equal to the constructor of one of these types.
+                    // Global.Number is just the Number type.
+
+                    schema.type[key] = global[val];
+                } else {
+                    schema.type[key] = val;
+                    schema.resolved = false;
+                }
+            } else {
+                throw new Error('All types in a json schema should be a string indicating the type.');
+            }
+        });
 
 
-
-        return <ISchemaObject>schema;
+        return schema;
     }
 
     public getSchema(name: string): ISchemaObject {
@@ -64,6 +110,62 @@ export class SchemaManager {
         return this.validator.validateModel(schemaName, modelData, full);
     }
 
+    public resolveAll(): boolean {
+        const unresolvable: string[] = [];
+
+        Object.keys(this._schemaRegistry).forEach((schemaName: string) => {
+            const schema: ISchemaObject = this._schemaRegistry[schemaName];
+
+            if (!SchemaManager.isSchemaResolved(schema)) {
+                if (!this.resolveSchema(schema)) {
+                    unresolvable.push(schemaName);
+                }
+            }
+        });
+
+        if (unresolvable.length) {
+            const s: string = unresolvable.join(', ');
+            throw new Error('Couldn\'t resolve the following schema(s): ' + s);
+        }
+
+        return true;
+    }
+
+    public resolveSchema(schema: ISchemaObject): boolean {
+        if (SchemaManager.isSchemaResolved(schema)) {
+            return true;
+        }
+
+        let isResolved: boolean = true;
+
+        Object.keys(schema.type).forEach((key: string) => {
+            const val: Function | ISchemaObject | string = schema.type[key];
+
+            if (typeof val === 'string' && this._schemaRegistry[val]) {
+                // Unresolved string from a json reference
+                schema.type[key] = this._schemaRegistry[val];
+                return;
+            }
+
+            if (typeof val === 'object') {
+                return;
+            }
+
+            if (typeof val === 'function') {
+                return;
+            }
+
+            isResolved = false;
+        });
+
+        schema.resolved = isResolved;
+        return isResolved;
+    }
+
+    get registeredSchemas(): string[] {
+        return Object.keys(this._schemaRegistry);
+    }
+
     get validator(): Validator {
         if (!this._validator) {
             this._validator = new Validator(this);
@@ -97,6 +199,11 @@ export class SchemaManager {
             if (typeof schema.type[key] === 'object') {
                 // There are more sub schemas
                 this._registerSchema(schema.type[key] as ISchemaObject);
+            } else if (typeof schema.type[key] === 'string') {
+                schema.resolved = false;
+            } else if (typeof schema.type[key] === 'undefined') {
+                throw new Error(`Type with key ${key} is undefined. If you need circular`
+                    + ` references, you can use the name of the referenced schema as string.`);
             }
         });
     }

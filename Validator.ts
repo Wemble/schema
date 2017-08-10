@@ -2,16 +2,15 @@ import { ISchemaObject, ISchemaRegistry, SchemaManager, metaDataValidator } from
 import { Observable } from 'rxjs';
 
 export class Validator {
+    public static readonly PRIMITIVES: string[] = ['String',
+        'Boolean', 'Number'];
+
     private static readonly WHITELISTED_KEYS: string[] = ['_id',
         '_isScalar', '_created', '_modified'];
-
-    private static readonly PRIMITIVES: string[] = ['String',
-        'Boolean', 'Number'];
 
     private _metaValidator: {
         [key: string]: metaDataValidator;
     } = {};
-
 
     constructor(private _schemaManager: SchemaManager) {
         _schemaManager.validator = this;
@@ -46,6 +45,10 @@ export class Validator {
             schema = this._schemaManager.getSchema(schemaName);
         } catch (e) {
             return Observable.throw(e);
+        }
+
+        if (!SchemaManager.isSchemaResolved(schema)) {
+            return Observable.throw(`Schema ${schemaName} is unresolved and cannot be validated.`);
         }
 
         if (schema.isArray && Array.isArray(modelData)) {
@@ -170,7 +173,13 @@ export class Validator {
 
     private getSchemaKeyType(schema: ISchemaObject, key: string): string {
         // This is either a function name or a ISchemaObject name
-        return schema.type[key].name;
+        if (typeof schema.type[key] === 'string') {
+            throw new Error(`Key ${key} is unresolved!`);
+        }
+
+        // We cast to any here since we know for certain the object contains the name property,
+        // since it's either a Function or ISchemaObject. But typescript will complain.
+        return (schema.type[key] as any).name;
     }
 
     private isKeyRequired(schema: ISchemaObject, key: string): boolean {
