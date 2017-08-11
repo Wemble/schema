@@ -128,7 +128,8 @@ export class Validator {
 
                 const type: string = this.getSchemaKeyType(schema, key);
 
-                return this._metaValidator[metaKey](keyData[metaKey], key, value, type);
+                return this._metaValidator[metaKey]
+                    (keyData[metaKey], key, value, type, keyData);
             })
             .every((b: boolean) => b);
     }
@@ -138,10 +139,6 @@ export class Validator {
         // These keys are always allowed
         if (Validator.WHITELISTED_KEYS.indexOf(key) !== -1) {
             return Observable.of(true);
-        }
-
-        if (typeof value === 'string') {
-            // Unresolved schema ?
         }
 
         const type: string = this.getSchemaKeyType(schema, key);
@@ -157,7 +154,7 @@ export class Validator {
                         + ` not defined, but this key is required.`);
                 } else {
                     // Not doing a full check so it's fine
-                    return this.validateMetaData(schema, key, value);
+                    return Observable.of(true);
                 }
             } else {
                 return Observable.throw(`Key ${key} in ${schema.name} is`

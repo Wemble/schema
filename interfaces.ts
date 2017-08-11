@@ -6,8 +6,10 @@ import { Observable } from 'rxjs';
  * key is the name of the key we are currently validating
  * value is the given value in the object we are validating
  * keyType is the type of the key in the Schema
+ * meta is the full metadata object
  */
-export type metaDataValidator = (metaValue: any, key: string, value: any, keyType: any) => Observable<boolean>;
+export type metaDataValidator =
+    (metaValue: any, key: string, value: any, keyType: any, meta: any) => Observable<boolean>;
 
 export interface ISchemaRegistry {
     [key: string]: ISchemaObject;
