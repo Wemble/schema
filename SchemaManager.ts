@@ -210,7 +210,11 @@ export class SchemaManager {
                 // There are more sub schemas
                 this._registerSchema(schema.type[key] as ISchemaObject);
             } else if (typeof schema.type[key] === 'string') {
-                schema.resolved = false;
+                // This can be resolved later
+
+                if (schema.type[key] !== Validator.TYPE_ANY) {
+                    schema.resolved = false;
+                }
             } else if (typeof schema.type[key] === 'undefined') {
                 throw new Error(`Type with key ${key} is undefined. If you need circular`
                     + ` references, you can use the name of the referenced schema as string.`);
