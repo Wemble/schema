@@ -49,6 +49,8 @@ export class SchemaManager {
                     // Global.Number is just the Number type.
 
                     schema.type[key] = global[val];
+                } else if (val === Validator.TYPE_ANY) {
+                    schema.type[key] = Validator.TYPE_ANY;
                 } else {
                     schema.type[key] = val;
                     schema.resolved = false;
@@ -142,10 +144,17 @@ export class SchemaManager {
         Object.keys(schema.type).forEach((key: string) => {
             const val: Function | ISchemaObject | string = schema.type[key];
 
-            if (typeof val === 'string' && this._schemaRegistry[val]) {
-                // Unresolved string from a json reference
-                schema.type[key] = this._schemaRegistry[val];
-                return;
+            if (typeof val === 'string') {
+                if (this._schemaRegistry[val]) {
+                    // Unresolved string from a json reference
+                    schema.type[key] = this._schemaRegistry[val];
+                    return;
+                }
+
+                if (val === Validator.TYPE_ANY) {
+                    // Any is always valid
+                    return;
+                }
             }
 
             if (typeof val === 'object') {
