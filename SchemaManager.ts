@@ -9,8 +9,56 @@ import { generate, characters } from 'shortid';
 characters('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@!');
 
 export class SchemaManager {
+    // This regex does not support multidimensional arrays
+    public static readonly ARRAY_MAP_NOTATION: RegExp = /^(\w+)?(?:\[([0-9]+)\])?$/;
+
     private _schemaRegistry: ISchemaRegistry = {};
     private _validator: Validator;
+
+    /**
+     * Checks if a string 'path' is in the schema. Examples of a map/path are:
+     * child[0], child[0].elem, random, [0].random
+     *
+     * Does not support multidimensional arrays.
+     * @param schema
+     * @param map
+     */
+    public static validateMap(schema: ISchemaObject, map: string): Observable<boolean> {
+        const parts: string[] = map.split('.');
+
+        let checkObj: any = schema;
+
+        for (let p of parts) {
+            const m: RegExpMatchArray = p.match(SchemaManager.ARRAY_MAP_NOTATION);
+
+            if (!m) {
+                return Observable.throw(`ValidateMap: Invalid map in ${map}, (${p}).`);
+            }
+
+            let [, variable, index]: any = m;
+
+            if (typeof variable !== 'undefined') {
+                if (!checkObj.type || !checkObj.type.hasOwnProperty(variable)) {
+                    return Observable.throw(`ValidateMap: Invalid map in ${map}, property ${variable} not found.`);
+                }
+
+                checkObj = checkObj.type[variable];
+            }
+
+            // If index defined, we are dealing with array notation (i.e. test[1])
+            if (typeof index !== 'undefined') {
+                if (!checkObj.isArray) {
+                    return Observable.throw(`ValidateMap: Invalid map in ${map}, `
+                        + `property ${variable} is not an array.`);
+                }
+
+                // Index does not actually advance the checkObj deeper.
+            }
+        }
+
+        return Observable.of(true);
+    }
+
 
     /**
      * Checks if a schema is resolved. If the resolved property is not present
@@ -244,6 +292,12 @@ export class SchemaManager {
      * @param schema
      */
     private _registerSchema(schema: ISchemaObject): ISchemaObject {
+        let name: string = schema.name;
+
+        if (!name) {
+            name = generate();
+        }
+
         if (this._schemaRegistry.hasOwnProperty(schema.name)) {
             return;
         }

@@ -15,6 +15,15 @@ export interface ISchemaRegistry {
     [key: string]: ISchemaObject;
 }
 
+/**
+ * Function means a constructor of a class/type. Possibilities are:
+ * String | Boolean | Number
+ *
+ * When type is a string it indicates an unresolved reference to a different
+ * SchemaObject.
+ */
+export type SchemaType = Function | ISchemaObject | string;
+
 export interface ISchemaObject {
     /**
      * Indicates if this schema is fully resolved. Being resolved means that all
@@ -27,19 +36,14 @@ export interface ISchemaObject {
     resolved?: boolean;
 
     /**
-     * The name of this object.
+     * The name of this object. If a name is not set it will be randomly generated.
      */
-    name: string;
+    name?: string;
 
     /**
      * Indicates what type this object is.
-     * Function means a constructor of a class/type. Possibilities are::
-     * String | Boolean | Number
-     *
-     * When type is a string it indicates an unresolved reference to a different
-     * SchemaObject.
      */
-    type: { [key: string]: Function | ISchemaObject | string };
+    type: { [key: string]: SchemaType };
 
     /**
      * Indicates if this object should be an array

@@ -185,6 +185,15 @@ export class Validator {
             }
         }
 
+        if (typeof value === 'undefined') {
+            if (full && this.isKeyRequired(schema, key)) {
+                return Observable.throw(`${schema.name}: Key ${key} is`
+                    + ` not defined, but this key is required.`);
+            } else {
+                return Observable.of(true);
+            }
+        }
+
         // Else, this object is another schema
         return this.validateModel(type, value, full)
             .every((b: boolean) => b)
