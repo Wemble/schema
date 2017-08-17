@@ -3,6 +3,10 @@ import { Validator } from './Validator';
 import { ISchemaObject, ISchemaRegistry, } from './';
 import * as _ from 'lodash';
 import { Observable } from 'rxjs';
+import { generate, characters } from 'shortid';
+
+// Sets characters for shortId, we don't want _ and - since it's confusing
+characters('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@!');
 
 export class SchemaManager {
     private _schemaRegistry: ISchemaRegistry = {};
@@ -17,9 +21,27 @@ export class SchemaManager {
         return schema.resolved !== false;
     }
 
-    public static schemaFromJson(obj: ISchemaObjectJson): ISchemaObject {
+    /**
+     * Converts a json defined schema to an actual schema object. Json schemas don't have the name
+     * property as requierd, if it is not present it will be automatically generatead.
+     * Note: This does not register the schema.
+     * @param obj
+     * @param nameHint if the schema doesn't have a name defined this will be appeneded to the
+     *                  randomly genereted ID that the schema gets.
+     */
+    public static schemaFromJson(obj: ISchemaObjectJson, nameHint?: string): ISchemaObject {
+        let name: string = obj.name;
+
+        if (!name) {
+            name = generate();
+
+            if (nameHint) {
+                name += '_' + nameHint;
+            }
+        }
+
         const schema: ISchemaObject = {
-            name: obj.name,
+            name: name,
             type: {}
         };
 
@@ -55,6 +77,8 @@ export class SchemaManager {
                     schema.type[key] = val;
                     schema.resolved = false;
                 }
+            } else if (typeof val === 'object') {
+                schema.type[key] = SchemaManager.schemaFromJson(val);
             } else {
                 throw new Error('All types in a json schema should be a string indicating the type.');
             }
@@ -72,12 +96,29 @@ export class SchemaManager {
         return this._schemaRegistry[name];
     }
 
-    public registerSchema(schema: ISchemaObject, ignoreDuplicate: boolean = false): void {
+    public hasSchema(name: string): boolean {
+        return this._schemaRegistry.hasOwnProperty(name);
+    }
+
+    /**
+     * Registers a schema and all its child schemas.
+     * @param schema
+     * @param ignoreDuplicate
+     */
+    public registerSchema(schema: ISchemaObject, ignoreDuplicate: boolean = false): ISchemaObject {
         if (this._schemaRegistry.hasOwnProperty(schema.name) && !ignoreDuplicate) {
             throw new Error(`A schema with name ${schema.name} is already defined!`);
         }
 
-        this._registerSchema(schema);
+        return this._registerSchema(schema);
+    }
+
+    public registerSchemaFromJson(schema: ISchemaObjectJson, nameHint?: string, ignoreDuplicate: boolean = false): ISchemaObject {
+        if (this._schemaRegistry.hasOwnProperty(schema.name) && !ignoreDuplicate) {
+            throw new Error(`A schema with name ${schema.name} is already defined!`);
+        }
+
+        return this._registerSchema(SchemaManager.schemaFromJson(schema, nameHint));
     }
 
     public schemasToObject(pattern: RegExp): Array<object> {
@@ -113,6 +154,10 @@ export class SchemaManager {
         return this.validator.validateModel(schemaName, modelData, full);
     }
 
+    /**
+     * Checks the current schema registry for unresolved schemas and resolves them
+     * if possible. This should be called after registering all schemas.
+     */
     public resolveAll(): boolean {
         const unresolvable: string[] = [];
 
@@ -198,7 +243,7 @@ export class SchemaManager {
      * quitely ignores it.
      * @param schema
      */
-    private _registerSchema(schema: ISchemaObject): void {
+    private _registerSchema(schema: ISchemaObject): ISchemaObject {
         if (this._schemaRegistry.hasOwnProperty(schema.name)) {
             return;
         }
@@ -220,5 +265,7 @@ export class SchemaManager {
                     + ` references, you can use the name of the referenced schema as string.`);
             }
         });
+
+        return schema;
     }
 }

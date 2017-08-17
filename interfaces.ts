@@ -60,7 +60,7 @@ export interface ISchemaObject {
  * This is how a schema can be saved on disk
  */
 export interface ISchemaObjectJson {
-    name: string;
+    name?: string;
 
     type: { [key: string]: string };
 
