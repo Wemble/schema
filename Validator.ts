@@ -31,8 +31,8 @@ export class Validator {
      * Note: it is allowed to leave out fields from the modelData that are present in the schema.
      * @param schemaName the name of the schema to base the check on
      * @param modelData the object to check
-     * @param full a flag indicating if the modelData should be a full object (i.e. true is used for create
-     *          while false is used for update)
+     * @param full a flag indicating if the modelData should be a full object
+     *          (i.e. true is used for create while false is used for update)
      * @returns 0 to n booleans indicating if the present keys have the proper data type attached
      *          to them.
      *
@@ -79,7 +79,9 @@ export class Validator {
             });
     }
 
-    private validateItem(schema: ISchemaObject, modelData: any, full: boolean): Observable<boolean> {
+    private validateItem(schema: ISchemaObject,
+        modelData: any, full: boolean): Observable<boolean> {
+
         const keys: string[] = full ? Object.keys(schema.type)
             : Object.keys(modelData);
 
@@ -113,7 +115,9 @@ export class Validator {
             });
     }
 
-    private validateMetaData(schema: ISchemaObject, key: string, value: any, type: string): Observable<boolean> {
+    private validateMetaData(schema: ISchemaObject, key: string,
+        value: any, type: string): Observable<boolean> {
+
         const metaData: any = schema.metaData;
 
         if (!metaData) {

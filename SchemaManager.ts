@@ -1,4 +1,4 @@
-import { ISchemaObjectJson } from './interfaces';
+import { ISchemaObjectJson, SchemaType } from './interfaces';
 import { Validator } from './Validator';
 import { ISchemaObject, ISchemaRegistry, } from './';
 import * as _ from 'lodash';
@@ -39,7 +39,8 @@ export class SchemaManager {
 
             if (typeof variable !== 'undefined') {
                 if (!checkObj.type || !checkObj.type.hasOwnProperty(variable)) {
-                    return Observable.throw(`ValidateMap: Invalid map in ${map}, property ${variable} not found.`);
+                    return Observable.throw(
+                        `ValidateMap: Invalid map in ${map}, property ${variable} not found.`);
                 }
 
                 checkObj = checkObj.type[variable];
@@ -59,7 +60,6 @@ export class SchemaManager {
         return Observable.of(true);
     }
 
-
     /**
      * Checks if a schema is resolved. If the resolved property is not present
      * it means the schema IS resolved. This is why we need an explicit false check.
@@ -78,15 +78,7 @@ export class SchemaManager {
      *                  randomly genereted ID that the schema gets.
      */
     public static schemaFromJson(obj: ISchemaObjectJson, nameHint?: string): ISchemaObject {
-        let name: string = obj.name;
-
-        if (!name) {
-            name = generate();
-
-            if (nameHint) {
-                name += '_' + nameHint;
-            }
-        }
+        const name: string = SchemaManager.generateSchemaName(obj, nameHint);
 
         const schema: ISchemaObject = {
             name: name,
@@ -128,12 +120,51 @@ export class SchemaManager {
             } else if (typeof val === 'object') {
                 schema.type[key] = SchemaManager.schemaFromJson(val);
             } else {
-                throw new Error('All types in a json schema should be a string indicating the type.');
+                throw new Error(
+                    'All types in a json schema should be a string indicating the type.');
             }
         });
 
 
         return schema;
+    }
+
+    private static generateSchemaName(schema: ISchemaObject | ISchemaObjectJson,
+        nameHint?: string): string {
+
+        let name: string = schema.name;
+
+        if (!name) {
+            name = generate();
+
+            if (nameHint) {
+                name += '_' + nameHint;
+            }
+        }
+
+        return name;
+    }
+
+    /**
+     * Forces an object to adhere to the given schema
+     * @param data
+     * @param schema
+     */
+    public forceType(data: any = {}, schema: ISchemaObject): any {
+        const newObj: any = {};
+
+        Object.keys(data).forEach((key: string) => {
+            const value: any = data[key];
+            const type: SchemaType = schema.type[key];
+
+            if (typeof type === 'function') {
+                newObj[key] = type(value);
+            } else if (typeof type === 'object') {
+                newObj[key] = this.forceType(value, type);
+            }
+        });
+
+        return newObj;
     }
 
     public getSchema(name: string): ISchemaObject {
@@ -153,15 +184,21 @@ export class SchemaManager {
      * @param schema
      * @param ignoreDuplicate
      */
-    public registerSchema(schema: ISchemaObject, ignoreDuplicate: boolean = false): ISchemaObject {
+    public registerSchema(schema: ISchemaObject,
+        nameHint?: string,
+        ignoreDuplicate: boolean = false): ISchemaObject {
+
         if (this._schemaRegistry.hasOwnProperty(schema.name) && !ignoreDuplicate) {
             throw new Error(`A schema with name ${schema.name} is already defined!`);
         }
 
-        return this._registerSchema(schema);
+        return this._registerSchema(schema, nameHint);
     }
 
-    public registerSchemaFromJson(schema: ISchemaObjectJson, nameHint?: string, ignoreDuplicate: boolean = false): ISchemaObject {
+    public registerSchemaFromJson(schema: ISchemaObjectJson,
+        nameHint?: string,
+        ignoreDuplicate: boolean = false): ISchemaObject {
+
         if (this._schemaRegistry.hasOwnProperty(schema.name) && !ignoreDuplicate) {
             throw new Error(`A schema with name ${schema.name} is already defined!`);
         }
@@ -291,12 +328,8 @@ export class SchemaManager {
      * quitely ignores it.
      * @param schema
      */
-    private _registerSchema(schema: ISchemaObject): ISchemaObject {
-        let name: string = schema.name;
-
-        if (!name) {
-            name = generate();
-        }
+    private _registerSchema(schema: ISchemaObject, nameHint?: string): ISchemaObject {
+        schema.name = SchemaManager.generateSchemaName(schema, nameHint);
 
         if (this._schemaRegistry.hasOwnProperty(schema.name)) {
             return;

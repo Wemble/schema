@@ -66,7 +66,7 @@ export interface ISchemaObject {
 export interface ISchemaObjectJson {
     name?: string;
 
-    type: { [key: string]: string };
+    type: { [key: string]: string | ISchemaObjectJson };
 
     isArray?: boolean;
 
