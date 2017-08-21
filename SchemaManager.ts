@@ -1,16 +1,17 @@
-import { ISchemaObjectJson, SchemaType } from './interfaces';
+import { customTypeValidator, ISchemaObjectJson, SchemaType } from './interfaces';
 import { Validator } from './Validator';
 import { ISchemaObject, ISchemaRegistry, } from './';
 import * as _ from 'lodash';
 import { Observable } from 'rxjs';
-import { generate, characters } from 'shortid';
+import * as shortid from 'shortid';
 
 // Sets characters for shortId, we don't want _ and - since it's confusing
-characters('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@!');
+shortid.characters('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@!');
 
 export class SchemaManager {
     // This regex does not support multidimensional arrays
     public static readonly ARRAY_MAP_NOTATION: RegExp = /^(\w+)?(?:\[([0-9]+)\])?$/;
+    public customTypes: string[] = [];
 
     private _schemaRegistry: ISchemaRegistry = {};
     private _validator: Validator;
@@ -69,6 +70,28 @@ export class SchemaManager {
         return schema.resolved !== false;
     }
 
+    private static generateSchemaName(schema: ISchemaObject | ISchemaObjectJson,
+        nameHint?: string): string {
+
+        let name: string = schema.name;
+
+        if (!name) {
+            name = shortid.generate();
+
+            if (nameHint) {
+                name += '_' + nameHint;
+            }
+        }
+
+        return name;
+    }
+
+    public registerType(typeName: string, typeValidator?: customTypeValidator): void {
+        this.customTypes.push(typeName);
+
+        this._validator.registerType(typeName, typeValidator);
+    }
+
     /**
      * Converts a json defined schema to an actual schema object. Json schemas don't have the name
      * property as requierd, if it is not present it will be automatically generatead.
@@ -77,7 +100,7 @@ export class SchemaManager {
      * @param nameHint if the schema doesn't have a name defined this will be appeneded to the
      *                  randomly genereted ID that the schema gets.
      */
-    public static schemaFromJson(obj: ISchemaObjectJson, nameHint?: string): ISchemaObject {
+    public schemaFromJson(obj: ISchemaObjectJson, nameHint?: string): ISchemaObject {
         const name: string = SchemaManager.generateSchemaName(obj, nameHint);
 
         const schema: ISchemaObject = {
@@ -101,8 +124,18 @@ export class SchemaManager {
             return schema;
         }
 
-        Object.keys(obj.type).forEach((key: string) => {
-            const val: any = obj.type[key];
+        let type: any = obj.type;
+        if (Array.isArray(type)) {
+            if (schema.isArray === false) {
+                throw new Error('Invalid schema: Type is an array but isArray is set to false.');
+            }
+
+            schema.isArray = true;
+            type = type[0];
+        }
+
+        Object.keys(type).forEach((key: string) => {
+            const val: any = type[key];
 
             if (typeof val === 'string') {
                 if (Validator.PRIMITIVES.indexOf(val) !== -1) {
@@ -111,38 +144,21 @@ export class SchemaManager {
                     // Global.Number is just the Number type.
 
                     schema.type[key] = global[val];
-                } else if (val === Validator.TYPE_ANY) {
-                    schema.type[key] = Validator.TYPE_ANY;
+                } else if (this.customTypes.indexOf(val) !== -1) {
+                    schema.type[key] = val;
                 } else {
                     schema.type[key] = val;
                     schema.resolved = false;
                 }
             } else if (typeof val === 'object') {
-                schema.type[key] = SchemaManager.schemaFromJson(val);
+                schema.type[key] = this.schemaFromJson(val, schema.name + '_child');
             } else {
                 throw new Error(
                     'All types in a json schema should be a string indicating the type.');
             }
         });
 
-
         return schema;
-    }
-
-    private static generateSchemaName(schema: ISchemaObject | ISchemaObjectJson,
-        nameHint?: string): string {
-
-        let name: string = schema.name;
-
-        if (!name) {
-            name = generate();
-
-            if (nameHint) {
-                name += '_' + nameHint;
-            }
-        }
-
-        return name;
     }
 
     /**
@@ -203,7 +219,7 @@ export class SchemaManager {
             throw new Error(`A schema with name ${schema.name} is already defined!`);
         }
 
-        return this._registerSchema(SchemaManager.schemaFromJson(schema, nameHint));
+        return this._registerSchema(this.schemaFromJson(schema, nameHint));
     }
 
     public schemasToObject(pattern: RegExp): Array<object> {
@@ -281,8 +297,7 @@ export class SchemaManager {
                     return;
                 }
 
-                if (val === Validator.TYPE_ANY) {
-                    // Any is always valid
+                if (this.customTypes.indexOf(val) !== -1) {
                     return;
                 }
             }
@@ -307,10 +322,6 @@ export class SchemaManager {
     }
 
     get validator(): Validator {
-        if (!this._validator) {
-            this._validator = new Validator(this);
-        }
-
         return this._validator;
     }
 
@@ -321,6 +332,21 @@ export class SchemaManager {
     }
 
     constructor() {
+        this._validator = new Validator(this);
+
+        this._validator.whitelistedKeys = ['_id',
+            '_isScalar', '_created', '_modified'];
+
+        this.registerType(Validator.TYPE_ANY);
+
+        // Register the primitve type validators
+        for (let p of Validator.PRIMITIVES) {
+            const pLower: string = p.toLowerCase();
+
+            this.registerType(p, (value: any): Observable<boolean> => {
+                return Observable.of(typeof value === pLower);
+            });
+        }
     }
 
     /**
@@ -344,7 +370,8 @@ export class SchemaManager {
             } else if (typeof schema.type[key] === 'string') {
                 // This can be resolved later
 
-                if (schema.type[key] !== Validator.TYPE_ANY) {
+                if (this.customTypes.indexOf(<string>schema.type[key]) === -1) {
+                    // It's only unresolved if a custom type isn't registered
                     schema.resolved = false;
                 }
             } else if (typeof schema.type[key] === 'undefined') {
