@@ -1,6 +1,7 @@
 import { customTypeValidator } from './interfaces';
 import { ISchemaObject, ISchemaRegistry, SchemaManager, metaDataValidator } from './';
 import { Observable } from 'rxjs';
+import { inspect } from 'util';
 
 export class Validator {
     public static readonly PRIMITIVES: string[] = ['String',
@@ -100,37 +101,43 @@ export class Validator {
     private validateItem(schema: ISchemaObject,
         modelData: any, full: boolean): Observable<boolean> {
 
-        const keys: string[] = full ? Object.keys(schema.type)
-            : Object.keys(modelData);
-
-        if (!keys.length) {
-            return Observable.throw(`${schema.name}: No key/values present in model.`);
-        }
-
-        // Check if there are keys in the model that are not in de schema
-        // This is only necessary when full is true, since we then loop over the keys
-        // in the schema instead of in the object.
-        if (full) {
-            const k: string = Object.keys(modelData).find((k: string) => {
-                return !schema.type.hasOwnProperty(k)
-                    && this.whitelistedKeys.indexOf(k) === -1;
-            });
-
-            if (k) {
-                return Observable.throw(`${schema.name}: Given key ${k} not defined in schema.`);
+        if (schema._singleType) {
+            if (full && typeof modelData === 'undefined') {
+                return Observable.throw(`${schema.name}: Empty object given.`);
             }
-        }
 
-        return Observable.from(keys)
-            .flatMap((key: string) => {
-                if (full && !modelData.hasOwnProperty(key)
-                    && this.isKeyRequired(schema, key)) {
-                    return Observable.throw(`${schema.name}: key ${key} is required.`);
+            return this.validateValue(schema, null, modelData, full);
+        } else {
+            const keys: string[] = full ? Object.keys(schema.type)
+                : Object.keys(modelData);
+
+            // Check if there are keys in the model that are not in de schema
+            // This is only necessary when full is true, since we then loop over the keys
+            // in the schema instead of in the object.
+            if (full) {
+                const k: string = Object.keys(modelData).find((k: string) => {
+                    return !schema.type.hasOwnProperty(k)
+                        && this.whitelistedKeys.indexOf(k) === -1;
+                });
+
+                if (k) {
+                    return Observable.throw(`${schema.name}: ` +
+                        `Given key ${k} not defined in schema.`);
                 }
+            }
 
-                const value: any = modelData[key];
-                return this.validateValue(schema, key, value, full);
-            });
+            return Observable.from(keys)
+                .flatMap((key: string) => {
+                    if (full && !modelData.hasOwnProperty(key)
+                        && this.isKeyRequired(schema, key)) {
+                        return Observable.throw(`${schema.name}: key ${key} is required.`);
+                    }
+
+                    const value: any = modelData[key];
+                    return this.validateValue(schema, key, value, full);
+                })
+                .defaultIfEmpty(true);
+        }
     }
 
     private validateMetaData(schema: ISchemaObject, key: string,
@@ -172,11 +179,33 @@ export class Validator {
 
     private validateValue(schema: ISchemaObject,
         key: string, value: any, full: boolean): Observable<boolean> {
+
+        if (key === null) {
+            const type: string = this.getSchemaKeyTypeSingle(schema);
+
+            if (this._typeValidator.hasOwnProperty(type)) {
+                // We can't validate metaData because we don't have key
+                return this._typeValidator[type](value)
+                    .flatMap((b: boolean) => {
+                        if (b) {
+                            return Observable.of(true);
+                        }
+
+                        return Observable.throw(`${schema.name}: Incorrect type for '${type}'.`);
+                    });
+            }
+
+            // Else, this object is another schema
+            return this.validateModel(type, value, full)
+                .every((b: boolean) => b);
+        }
+
         // These keys are always allowed
         if (this.whitelistedKeys.indexOf(key) !== -1) {
             return Observable.of(true);
         }
 
+        // A key is given that isn't defined in the schema
         if (typeof schema.type[key] === 'undefined') {
             return Observable.throw(`${schema.name}: Given key ${key} not defined in schema.`);
         }
@@ -226,6 +255,21 @@ export class Validator {
         // We cast to any here since we know for certain the object contains the name property,
         // since it's either a Function or ISchemaObject. But typescript will complain.
         return (schema.type[key] as any).name;
+    }
+
+    private getSchemaKeyTypeSingle(schema: ISchemaObject): string {
+        // This is either a function name or a ISchemaObject name
+        if (typeof schema.type === 'string') {
+            if (this._typeValidator.hasOwnProperty(<string>schema.type)) {
+                return <string>schema.type;
+            }
+
+            throw new Error(`${schema.name}: Key is unresolved!`);
+        }
+
+        // We cast to any here since we know for certain the object contains the name property,
+        // since it's either a Function or ISchemaObject. But typescript will complain.
+        return (schema.type as any).name;
     }
 
     private isKeyRequired(schema: ISchemaObject, key: string): boolean {

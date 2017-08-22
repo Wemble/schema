@@ -27,6 +27,9 @@ export interface ISchemaRegistry {
  */
 export type SchemaType = Function | ISchemaObject | string;
 
+type _SchemaTypeJson = Function | ISchemaObjectJson | string;
+export type SchemaTypeJson = _SchemaTypeJson | _SchemaTypeJson[];
+
 export interface ISchemaObject {
     /**
      * Indicates if this schema is fully resolved. Being resolved means that all
@@ -36,7 +39,13 @@ export interface ISchemaObject {
      * When the resolved parameter is not present it means that the schema IS resolved
      * This means simply checking `if(obj.resolved)` won't have correct behaviour!
      */
-    resolved?: boolean;
+    _resolved?: boolean;
+
+    /**
+     * If this is true, type is a SchemaType directly instead of being an object
+     * with SchemaTypes as values.
+     */
+    _singleType?: boolean;
 
     /**
      * The name of this object. If a name is not set it will be randomly generated.
@@ -46,7 +55,7 @@ export interface ISchemaObject {
     /**
      * Indicates what type this object is.
      */
-    type: { [key: string]: SchemaType };
+    type: { [key: string]: SchemaType } | SchemaType;
 
     /**
      * Indicates if this object should be an array
@@ -69,7 +78,7 @@ export interface ISchemaObject {
 export interface ISchemaObjectJson {
     name?: string;
 
-    type: { [key: string]: string | ISchemaObjectJson };
+    type: { [key: string]: SchemaTypeJson } | SchemaTypeJson;
 
     isArray?: boolean;
 

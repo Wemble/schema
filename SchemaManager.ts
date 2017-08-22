@@ -4,6 +4,7 @@ import { ISchemaObject, ISchemaRegistry, } from './';
 import * as _ from 'lodash';
 import { Observable } from 'rxjs';
 import * as shortid from 'shortid';
+import { inspect } from 'util';
 
 // Sets characters for shortId, we don't want _ and - since it's confusing
 shortid.characters('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@!');
@@ -67,13 +68,15 @@ export class SchemaManager {
      * @param schema
      */
     public static isSchemaResolved(schema: ISchemaObject): boolean {
-        return schema.resolved !== false;
+        return schema._resolved !== false;
     }
 
-    private static generateSchemaName(schema: ISchemaObject | ISchemaObjectJson,
+    private static generateSchemaName(schema: ISchemaObject | ISchemaObjectJson | string,
         nameHint?: string): string {
 
-        let name: string = schema.name;
+        // Cast to any because typescript will complaing about string.name,
+        // it will just be undefined which is fine for the if statement.
+        let name: string = (<any>schema).name;
 
         if (!name) {
             name = shortid.generate();
@@ -100,7 +103,7 @@ export class SchemaManager {
      * @param nameHint if the schema doesn't have a name defined this will be appeneded to the
      *                  randomly genereted ID that the schema gets.
      */
-    public schemaFromJson(obj: ISchemaObjectJson, nameHint?: string): ISchemaObject {
+    public schemaFromJson(obj: ISchemaObjectJson | string, nameHint?: string): ISchemaObject {
         const name: string = SchemaManager.generateSchemaName(obj, nameHint);
 
         const schema: ISchemaObject = {
@@ -108,30 +111,66 @@ export class SchemaManager {
             type: {}
         };
 
-        if (typeof obj.isArray !== 'undefined') {
-            schema.isArray = obj.isArray;
+        let type: any;
+
+        // Shorthand syntax for array schema.
+        if (Array.isArray(obj)) {
+            schema.isArray = true;
+            obj = obj[0];
         }
 
-        if (typeof obj.uniqueKey !== 'undefined') {
-            schema.uniqueKey = obj.uniqueKey;
-        }
-
-        if (typeof obj.metaData !== 'undefined') {
-            schema.metaData = obj.metaData;
-        }
-
-        if (typeof obj.type === 'undefined') {
-            return schema;
-        }
-
-        let type: any = obj.type;
-        if (Array.isArray(type)) {
-            if (schema.isArray === false) {
-                throw new Error('Invalid schema: Type is an array but isArray is set to false.');
+        if (typeof obj === 'object') {
+            if (typeof obj.isArray !== 'undefined') {
+                schema.isArray = obj.isArray;
             }
 
-            schema.isArray = true;
-            type = type[0];
+            if (typeof obj.uniqueKey !== 'undefined') {
+                schema.uniqueKey = obj.uniqueKey;
+            }
+
+            if (typeof obj.metaData !== 'undefined') {
+                schema.metaData = obj.metaData;
+            }
+
+            if (typeof obj.type === 'undefined') {
+                return schema;
+            }
+
+            if (Array.isArray(obj.type)) {
+                if (obj.isArray === false) {
+                    throw new Error(`${schema.name}: type is array, but isArray is false.`);
+                }
+
+                schema._singleType = true;
+                schema.isArray = true;
+                type = obj.type[0];
+            } else {
+                type = obj.type;
+            }
+        } else {
+            // If the object is just a single string, it's also the type
+            type = obj;
+        }
+
+        if (typeof type === 'string') {
+            schema._singleType = true;
+
+            const val: string = type;
+            if (Validator.PRIMITIVES.indexOf(val) !== -1) {
+                schema.type = global[val];
+            } else if (this.customTypes.indexOf(val) !== -1) {
+                schema.type = val;
+            } else if (this._schemaRegistry.hasOwnProperty(val)) {
+                schema.type = this._schemaRegistry[val];
+            } else {
+                schema.type = val;
+                schema._resolved = false;
+            }
+
+            return schema;
+        } else if (typeof type === 'function') {
+            schema.type = type;
+            return schema;
         }
 
         Object.keys(type).forEach((key: string) => {
@@ -146,15 +185,19 @@ export class SchemaManager {
                     schema.type[key] = global[val];
                 } else if (this.customTypes.indexOf(val) !== -1) {
                     schema.type[key] = val;
+                } else if (this._schemaRegistry.hasOwnProperty(val)) {
+                    schema.type[key] = this._schemaRegistry[val];
                 } else {
                     schema.type[key] = val;
-                    schema.resolved = false;
+                    schema._resolved = false;
                 }
             } else if (typeof val === 'object') {
-                schema.type[key] = this.schemaFromJson(val, schema.name + '_child');
+                schema.type[key] = this.schemaFromJson(val);
+            } else if (typeof val === 'function') {
+                schema.type[key] = val;
             } else {
                 throw new Error(
-                    'All types in a json schema should be a string indicating the type.');
+                    'All types in a json schema should be a string or function.');
             }
         });
 
@@ -167,18 +210,26 @@ export class SchemaManager {
      * @param schema
      */
     public forceType(data: any = {}, schema: ISchemaObject): any {
-        const newObj: any = {};
+        let newObj: any = {};
 
-        Object.keys(data).forEach((key: string) => {
-            const value: any = data[key];
-            const type: SchemaType = schema.type[key];
+        if (typeof data === 'object') {
+            Object.keys(data).forEach((key: string) => {
+                const value: any = data[key];
+                const type: SchemaType = schema.type[key];
+
+                if (typeof type === 'function') {
+                    newObj[key] = type(value);
+                } else if (typeof type === 'object') {
+                    newObj[key] = this.forceType(value, type);
+                }
+            });
+        } else {
+            const type: SchemaType | { [k: string]: SchemaType } = schema.type;
 
             if (typeof type === 'function') {
-                newObj[key] = type(value);
-            } else if (typeof type === 'object') {
-                newObj[key] = this.forceType(value, type);
+                newObj = type(data);
             }
-        });
+        }
 
         return newObj;
     }
@@ -211,11 +262,12 @@ export class SchemaManager {
         return this._registerSchema(schema, nameHint);
     }
 
-    public registerSchemaFromJson(schema: ISchemaObjectJson,
+    public registerSchemaFromJson(schema: ISchemaObjectJson | string,
         nameHint?: string,
         ignoreDuplicate: boolean = false): ISchemaObject {
 
-        if (this._schemaRegistry.hasOwnProperty(schema.name) && !ignoreDuplicate) {
+        if (typeof schema !== 'string' &&
+            this._schemaRegistry.hasOwnProperty(schema.name) && !ignoreDuplicate) {
             throw new Error(`A schema with name ${schema.name} is already defined!`);
         }
 
@@ -242,9 +294,12 @@ export class SchemaManager {
 
         const copy: any = _.cloneDeep(this._schemaRegistry[name]);
 
-        Object.keys(copy.type).forEach((key: string) => {
-            copy.type[key] = copy.type[key].name;
-        });
+        if (typeof copy.type !== 'string') {
+            Object.keys(copy.type).forEach((key: string) => {
+                copy.type[key] = copy.type[key].name;
+            });
+        }
+
 
         return copy;
     }
@@ -287,33 +342,56 @@ export class SchemaManager {
 
         let isResolved: boolean = true;
 
-        Object.keys(schema.type).forEach((key: string) => {
-            const val: Function | ISchemaObject | string = schema.type[key];
+        if (schema._singleType) {
+            const val: SchemaType = <SchemaType>schema.type;
 
             if (typeof val === 'string') {
                 if (this._schemaRegistry[val]) {
                     // Unresolved string from a json reference
-                    schema.type[key] = this._schemaRegistry[val];
-                    return;
+                    schema.type = this._schemaRegistry[val];
+
+                    return schema._resolved = true;
                 }
 
                 if (this.customTypes.indexOf(val) !== -1) {
-                    return;
+                    return schema._resolved = true;
                 }
-            }
-
-            if (typeof val === 'object') {
-                return;
-            }
-
-            if (typeof val === 'function') {
-                return;
+            } else if (typeof val === 'object') {
+                return schema._resolved = true;
+            } else if (typeof val === 'function') {
+                return schema._resolved = true;
             }
 
             isResolved = false;
-        });
+        } else {
+            Object.keys(schema.type).forEach((key: string) => {
+                const val: SchemaType = schema.type[key];
 
-        schema.resolved = isResolved;
+                if (typeof val === 'string') {
+                    if (this._schemaRegistry[val]) {
+                        // Unresolved string from a json reference
+                        schema.type[key] = this._schemaRegistry[val];
+                        return;
+                    }
+
+                    if (this.customTypes.indexOf(val) !== -1) {
+                        return;
+                    }
+                }
+
+                if (typeof val === 'object') {
+                    return;
+                }
+
+                if (typeof val === 'function') {
+                    return;
+                }
+
+                isResolved = false;
+            });
+        }
+
+        schema._resolved = isResolved;
         return isResolved;
     }
 
@@ -358,10 +436,26 @@ export class SchemaManager {
         schema.name = SchemaManager.generateSchemaName(schema, nameHint);
 
         if (this._schemaRegistry.hasOwnProperty(schema.name)) {
-            return;
+            return this._schemaRegistry[schema.name];
         }
 
         this._schemaRegistry[schema.name] = schema;
+
+        if (schema._singleType) {
+            if (typeof schema.type === 'object') {
+                // There are more sub schemas
+                this._registerSchema(schema.type as ISchemaObject);
+            } else if (typeof schema.type === 'string') {
+                // This can be resolved later
+
+                if (this.customTypes.indexOf(<string>schema.type) === -1) {
+                    // It's only unresolved if a custom type isn't registered
+                    schema._resolved = false;
+                }
+            }
+
+            return schema;
+        }
 
         Object.keys(schema.type).forEach((key: string) => {
             if (typeof schema.type[key] === 'object') {
@@ -372,7 +466,7 @@ export class SchemaManager {
 
                 if (this.customTypes.indexOf(<string>schema.type[key]) === -1) {
                     // It's only unresolved if a custom type isn't registered
-                    schema.resolved = false;
+                    schema._resolved = false;
                 }
             } else if (typeof schema.type[key] === 'undefined') {
                 throw new Error(`Type with key ${key} is undefined. If you need circular`
