@@ -169,6 +169,7 @@ export class SchemaManager {
 
             return schema;
         } else if (typeof type === 'function') {
+            schema._singleType = true;
             schema.type = type;
             return schema;
         }

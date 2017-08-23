@@ -12,7 +12,7 @@ export type metaDataValidator =
     (metaValue: any, key: string, value: any, keyType: any, meta: any) => Observable<boolean>;
 
 export type customTypeValidator =
-    (value: any) => Observable<boolean>;
+    (value: any, metaData?: any) => Observable<boolean>;
 
 export interface ISchemaRegistry {
     [key: string]: ISchemaObject;

@@ -115,6 +115,9 @@ export class Validator {
             // This is only necessary when full is true, since we then loop over the keys
             // in the schema instead of in the object.
             if (full) {
+                if (typeof modelData === 'undefined') {
+                    modelData = {};
+                }
                 const k: string = Object.keys(modelData).find((k: string) => {
                     return !schema.type.hasOwnProperty(k)
                         && this.whitelistedKeys.indexOf(k) === -1;
@@ -150,11 +153,19 @@ export class Validator {
             return Observable.of(true);
         }
 
-        const keyData: any = metaData[key];
 
-        if (!keyData) {
-            // This key has no metaData
-            return Observable.of(true);
+        let keyData: any;
+        if (key === null) {
+            // if a key is not given this means this is a singleType schema, the metaData
+            // will be read from the metaData object directly instead of under the right key.
+            keyData = metaData;
+        } else {
+            keyData = metaData[key];
+
+            if (!keyData) {
+                // This key has no metaData
+                return Observable.of(true);
+            }
         }
 
         const keyArray: string[] = Object.keys(keyData);
@@ -185,13 +196,16 @@ export class Validator {
 
             if (this._typeValidator.hasOwnProperty(type)) {
                 // We can't validate metaData because we don't have key
-                return this._typeValidator[type](value)
+                return this._typeValidator[type](value, schema.metaData)
                     .flatMap((b: boolean) => {
                         if (b) {
                             return Observable.of(true);
                         }
 
                         return Observable.throw(`${schema.name}: Incorrect type for '${type}'.`);
+                    })
+                    .flatMap(() => {
+                        return this.validateMetaData(schema, key, value, type);
                     });
             }
 
@@ -222,7 +236,13 @@ export class Validator {
         const type: string = this.getSchemaKeyType(schema, key);
 
         if (this._typeValidator.hasOwnProperty(type)) {
-            return this._typeValidator[type](value)
+            let meta: any = null;
+
+            if (schema.metaData && schema.metaData[key]) {
+                meta = schema.metaData[key];
+            }
+
+            return this._typeValidator[type](value, meta)
                 .flatMap((b: boolean) => {
                     if (b) {
                         return Observable.of(true);
