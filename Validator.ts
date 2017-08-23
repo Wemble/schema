@@ -1,7 +1,6 @@
 import { customTypeValidator } from './interfaces';
 import { ISchemaObject, ISchemaRegistry, SchemaManager, metaDataValidator } from './';
 import { Observable } from 'rxjs';
-import { inspect } from 'util';
 
 export class Validator {
     public static readonly PRIMITIVES: string[] = ['String',

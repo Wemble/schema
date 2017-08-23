@@ -30,6 +30,10 @@ export type SchemaType = Function | ISchemaObject | string;
 type _SchemaTypeJson = Function | ISchemaObjectJson | string;
 export type SchemaTypeJson = _SchemaTypeJson | _SchemaTypeJson[];
 
+export interface ISchemaTypeObject {
+    [key: string]: SchemaType;
+}
+
 export interface ISchemaObject {
     /**
      * Indicates if this schema is fully resolved. Being resolved means that all
@@ -55,7 +59,7 @@ export interface ISchemaObject {
     /**
      * Indicates what type this object is.
      */
-    type: { [key: string]: SchemaType } | SchemaType;
+    type: ISchemaTypeObject | SchemaType;
 
     /**
      * Indicates if this object should be an array
@@ -85,11 +89,4 @@ export interface ISchemaObjectJson {
     uniqueKey?: string;
 
     metaData?: { [key: string]: any };
-}
-
-export interface IModelData {
-    [key: string]: any;
-    _created?: Date;
-    _modified?: Date;
-    _id?: ObjectID | string;
 }

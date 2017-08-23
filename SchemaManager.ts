@@ -4,7 +4,6 @@ import { ISchemaObject, ISchemaRegistry, } from './';
 import * as _ from 'lodash';
 import { Observable } from 'rxjs';
 import * as shortid from 'shortid';
-import { inspect } from 'util';
 
 // Sets characters for shortId, we don't want _ and - since it's confusing
 shortid.characters('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@!');
@@ -412,9 +411,6 @@ export class SchemaManager {
 
     constructor() {
         this._validator = new Validator(this);
-
-        this._validator.whitelistedKeys = ['_id',
-            '_isScalar', '_created', '_modified'];
 
         this.registerType(Validator.TYPE_ANY);
 
