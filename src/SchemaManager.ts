@@ -1,13 +1,12 @@
 import {
+    ISchemaObject, ISchemaRegistry,
     customTypeValidator, ISchemaObjectJson,
     ISchemaTypeObject, SchemaType
 } from './interfaces';
 import { Validator } from './Validator';
-import { ISchemaObject, ISchemaRegistry, } from './';
 import * as _ from 'lodash';
 import { Observable } from 'rxjs';
 import * as shortid from 'shortid';
-import { inspect } from 'util';
 
 // Sets characters for shortId, we don't want _ and - since it's confusing
 shortid.characters('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@!');
