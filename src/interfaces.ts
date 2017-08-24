@@ -26,7 +26,7 @@ export interface ISchemaRegistry {
  */
 export type SchemaType = Function | ISchemaObject | string;
 
-type _SchemaTypeJson = Function | ISchemaObjectJson | string;
+export type _SchemaTypeJson = Function | ISchemaObjectJson | string;
 export type SchemaTypeJson = _SchemaTypeJson | _SchemaTypeJson[];
 
 export interface ISchemaTypeObject {
