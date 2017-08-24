@@ -1,9 +1,13 @@
-import { customTypeValidator, ISchemaObjectJson, SchemaType } from './interfaces';
+import {
+    customTypeValidator, ISchemaObjectJson,
+    ISchemaTypeObject, SchemaType
+} from './interfaces';
 import { Validator } from './Validator';
 import { ISchemaObject, ISchemaRegistry, } from './';
 import * as _ from 'lodash';
 import { Observable } from 'rxjs';
 import * as shortid from 'shortid';
+import { inspect } from 'util';
 
 // Sets characters for shortId, we don't want _ and - since it's confusing
 shortid.characters('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ@!');
@@ -82,16 +86,19 @@ export class SchemaManager {
      * Note: This does not register the schema.
      * @param obj
      */
-    public schemaFromJson(obj: ISchemaObjectJson | string): ISchemaObject {
+    public schemaFromJson(obj: ISchemaObjectJson | ISchemaObjectJson[] | string): ISchemaObject {
         const schema: ISchemaObject = {
             name: (<any>obj).name,
             type: {}
         };
 
-        let type: any;
+        let typeHandler: any;
 
-        // Shorthand syntax for array schema.
         if (Array.isArray(obj)) {
+            if (obj.length !== 1) {
+                throw new Error(`${schema.name}: using array shorthand but array is invalid.`);
+            }
+
             schema.isArray = true;
             obj = obj[0];
         }
@@ -118,37 +125,55 @@ export class SchemaManager {
                     throw new Error(`${schema.name}: type is array, but isArray is false.`);
                 }
 
-                schema._singleType = true;
-                schema.isArray = true;
-                type = obj.type[0];
+                return this.schemaFromJson(<ISchemaObjectJson[]>obj.type);
             } else {
-                type = obj.type;
+                typeHandler = this.handleType(obj.type);
             }
         } else {
             // If the object is just a single string, it's also the type
-            type = obj;
+            typeHandler = this.handleType(obj);
         }
 
+        schema.type = typeHandler.type;
+
+        if (typeof typeHandler._resolved !== 'undefined') {
+            schema._resolved = typeHandler._resolved;
+        }
+
+        if (typeof typeHandler._singleType !== 'undefined') {
+            schema._singleType = typeHandler._singleType;
+        }
+
+        return schema;
+    }
+
+    public handleType(type: object | string | Function):
+        { type: any; _singleType: boolean; _resolved: boolean } {
+
+        const obj: any = {
+            type: {}
+        };
+
         if (typeof type === 'string') {
-            schema._singleType = true;
+            obj._singleType = true;
 
             const val: string = type;
             if (Validator.PRIMITIVES.indexOf(val) !== -1) {
-                schema.type = global[val];
+                obj.type = global[val];
             } else if (this.customTypes.indexOf(val) !== -1) {
-                schema.type = val;
+                obj.type = val;
             } else if (this._schemaRegistry.hasOwnProperty(val)) {
-                schema.type = this._schemaRegistry[val];
+                obj.type = this._schemaRegistry[val];
             } else {
-                schema.type = val;
-                schema._resolved = false;
+                obj.type = val;
+                obj._resolved = false;
             }
 
-            return schema;
+            return obj;
         } else if (typeof type === 'function') {
-            schema._singleType = true;
-            schema.type = type;
-            return schema;
+            obj._singleType = true;
+            obj.type = type;
+            return obj;
         }
 
         Object.keys(type).forEach((key: string) => {
@@ -160,26 +185,26 @@ export class SchemaManager {
                     // equal to the constructor of one of these types.
                     // Global.Number is just the Number type.
 
-                    schema.type[key] = global[val];
+                    obj.type[key] = global[val];
                 } else if (this.customTypes.indexOf(val) !== -1) {
-                    schema.type[key] = val;
+                    obj.type[key] = val;
                 } else if (this._schemaRegistry.hasOwnProperty(val)) {
-                    schema.type[key] = this._schemaRegistry[val];
+                    obj.type[key] = this._schemaRegistry[val];
                 } else {
-                    schema.type[key] = val;
-                    schema._resolved = false;
+                    obj.type[key] = val;
+                    obj._resolved = false;
                 }
             } else if (typeof val === 'object') {
-                schema.type[key] = this.schemaFromJson(val);
+                obj.type[key] = this.schemaFromJson(val);
             } else if (typeof val === 'function') {
-                schema.type[key] = val;
+                obj.type[key] = val;
             } else {
                 throw new Error(
                     'All types in a json schema should be a string or function.');
             }
         });
 
-        return schema;
+        return obj;
     }
 
     /**
