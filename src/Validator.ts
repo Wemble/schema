@@ -1,5 +1,8 @@
-import { customTypeValidator } from './interfaces';
-import { ISchemaObject, ISchemaRegistry, SchemaManager, metaDataValidator } from './';
+import {
+    ISchemaObject, ISchemaRegistry,
+    metaDataValidator, customTypeValidator
+} from './interfaces';
+import { SchemaManager } from './SchemaManager';
 import { Observable } from 'rxjs';
 
 export class Validator {
