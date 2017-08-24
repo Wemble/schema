@@ -20,6 +20,6 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "removeComments": true,
-    "outDir": "../testDist"
+    "outDir": "../test-dist"
   }
 }

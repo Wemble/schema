@@ -1,18 +1,28 @@
 {
-  "name": "wemble-schema",
-  "version": "1.0.0",
+  "name": "@wemble/schema",
+  "version": "1.0.3",
   "description": "",
-  "main": "lib/index.js",
+  "main": "dist/index.js",
   "scripts": {
     "watch": "tsc -p ./tsconfig.json --watch ",
     "pretest": "tsc --project ./test",
-    "test": "node node_modules/.bin/mocha --require source-map-support/register testDist/**/*.js -s 0"
+    "test": "node node_modules/.bin/mocha --require source-map-support/register test-dist/**/*.js -s 0"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Wemble/schema.git"
   },
-  "author": "Wemble",
+  "author": {
+    "name": "Wilco Kruijer",
+    "email": "wilcokruijer@ziggo.nl"
+  },
+  "contributors": [
+    {
+      "name": "Niklas Kors",
+      "email": "me@niklaskors.com",
+      "url": "https://niklaskors.com/"
+    }
+  ],
   "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/Wemble/schema/issues"
