@@ -277,11 +277,11 @@ export class SchemaManager {
             nameHint, ignoreDuplicate);
     }
 
-    public schemasToObject(pattern: RegExp): Array<object> {
+    public schemasToJson(pattern: RegExp): any[] {
         return Object.keys(this._schemaRegistry).filter((key: string) => {
             return pattern.test(key);
         }).map((key: string) => {
-            return this.schemaToObject(key);
+            return this.schemaToJson(key);
         });
     }
 
@@ -290,17 +290,19 @@ export class SchemaManager {
      * This does not search the schema for deep schemas.
      * @param name the name of the schema to converrt
      */
-    public schemaToObject(name: string): object {
+    public schemaToJson(name: string): any {
         if (!this._schemaRegistry.hasOwnProperty(name)) {
             throw new Error(`A schema with name ${name} isn't registered!`);
         }
 
         const copy: any = _.cloneDeep(this._schemaRegistry[name]);
 
-        if (typeof copy.type !== 'string') {
+        if (typeof copy.type === 'object') {
             Object.keys(copy.type).forEach((key: string) => {
                 copy.type[key] = copy.type[key].name;
             });
+        } else if (typeof copy.type === 'function') {
+            copy.type = copy.type.name;
         }
 
 

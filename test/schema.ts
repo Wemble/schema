@@ -831,4 +831,29 @@ describe('Schema', function (): void {
                 done();
             });
     });
+
+    it('Should test if array shorthand gets converted correctly in toJson',
+        function (done: MochaDone): void {
+            const json: any = {
+                name: 'kutzooi',
+                type: {
+                    key: String,
+                    plugins: [String],
+                    domain: String
+                }
+            };
+
+            const schema: ISchemaObject = sm.registerSchemaFromJson(json);
+            expect(schema.type).to.not.deep.equal({});
+
+            const json1: any = sm.schemaToJson(schema.name);
+            expect(json1.type.key).to.be.equal('String');
+            expect(json1.type.domain).to.be.equal('String');
+
+            const schema2: ISchemaObject = sm.getSchema((<any>schema.type).plugins.name);
+            const json2: any = sm.schemaToJson(schema2.name);
+            expect(json2.type).to.be.equal('String');
+
+            done();
+        });
 });
