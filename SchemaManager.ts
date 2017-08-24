@@ -70,24 +70,6 @@ export class SchemaManager {
         return schema._resolved !== false;
     }
 
-    private static generateSchemaName(schema: ISchemaObject | ISchemaObjectJson | string,
-        nameHint?: string): string {
-
-        // Cast to any because typescript will complaing about string.name,
-        // it will just be undefined which is fine for the if statement.
-        let name: string = (<any>schema).name;
-
-        if (!name) {
-            name = shortid.generate();
-
-            if (nameHint) {
-                name += '_' + nameHint;
-            }
-        }
-
-        return name;
-    }
-
     public registerType(typeName: string, typeValidator?: customTypeValidator): void {
         this.customTypes.push(typeName);
 
@@ -99,14 +81,10 @@ export class SchemaManager {
      * property as requierd, if it is not present it will be automatically generatead.
      * Note: This does not register the schema.
      * @param obj
-     * @param nameHint if the schema doesn't have a name defined this will be appeneded to the
-     *                  randomly genereted ID that the schema gets.
      */
-    public schemaFromJson(obj: ISchemaObjectJson | string, nameHint?: string): ISchemaObject {
-        const name: string = SchemaManager.generateSchemaName(obj, nameHint);
-
+    public schemaFromJson(obj: ISchemaObjectJson | string): ISchemaObject {
         const schema: ISchemaObject = {
-            name: name,
+            name: (<any>obj).name,
             type: {}
         };
 
@@ -259,7 +237,7 @@ export class SchemaManager {
             throw new Error(`A schema with name ${schema.name} is already defined!`);
         }
 
-        return this._registerSchema(schema, nameHint);
+        return this._registerSchema(schema, nameHint, ignoreDuplicate);
     }
 
     public registerSchemaFromJson(schema: ISchemaObjectJson | string,
@@ -271,7 +249,8 @@ export class SchemaManager {
             throw new Error(`A schema with name ${schema.name} is already defined!`);
         }
 
-        return this._registerSchema(this.schemaFromJson(schema, nameHint));
+        return this._registerSchema(this.schemaFromJson(schema),
+            nameHint, ignoreDuplicate);
     }
 
     public schemasToObject(pattern: RegExp): Array<object> {
@@ -424,24 +403,53 @@ export class SchemaManager {
         }
     }
 
+    private generateSchemaName(name: string, nameHint?: string,
+        ignoreDuplicate: boolean = false): string {
+
+        let duplicate: boolean = false;
+
+        if (name && this._schemaRegistry.hasOwnProperty(name)) {
+            if (!ignoreDuplicate) {
+                throw new Error(`A schema with name ${name} is already defined!`);
+            }
+
+            duplicate = true;
+        }
+
+        if (name && duplicate) {
+            return name + '_' + shortid.generate();
+        } else if (name) {
+            return name;
+        } else {
+            if (nameHint) {
+                return this.generateSchemaName(nameHint, null, ignoreDuplicate);
+            }
+
+            return shortid.generate();
+        }
+    }
+
+
     /**
      * This function doesn't throw when a schema is already registered, it just
      * quitely ignores it.
      * @param schema
      */
-    private _registerSchema(schema: ISchemaObject, nameHint?: string): ISchemaObject {
-        schema.name = SchemaManager.generateSchemaName(schema, nameHint);
+    private _registerSchema(schema: ISchemaObject, nameHint?: string,
+        ignoreDuplicate: boolean = false): ISchemaObject {
 
-        if (this._schemaRegistry.hasOwnProperty(schema.name)) {
+        if (ignoreDuplicate && this._schemaRegistry.hasOwnProperty(schema.name)) {
             return this._schemaRegistry[schema.name];
         }
+
+        schema.name = this.generateSchemaName(schema.name, nameHint, ignoreDuplicate);
 
         this._schemaRegistry[schema.name] = schema;
 
         if (schema._singleType) {
             if (typeof schema.type === 'object') {
                 // There are more sub schemas
-                this._registerSchema(schema.type as ISchemaObject);
+                this._registerSchema(schema.type as ISchemaObject, null, true);
             } else if (typeof schema.type === 'string') {
                 // This can be resolved later
 
@@ -457,7 +465,7 @@ export class SchemaManager {
         Object.keys(schema.type).forEach((key: string) => {
             if (typeof schema.type[key] === 'object') {
                 // There are more sub schemas
-                this._registerSchema(schema.type[key] as ISchemaObject);
+                this._registerSchema(schema.type[key] as ISchemaObject, null, true);
             } else if (typeof schema.type[key] === 'string') {
                 // This can be resolved later
 
